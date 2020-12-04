@@ -82,7 +82,7 @@ def plot_mountain_cart(agent):
     cbar_pi.ax.set_ylabel('std')
 
 
-def save_model_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion, epochs, replay_buffer, filename='./saved_model.pth'):
+def save_model_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion=0, epochs=0, replay_buffer=[], filename='./saved_model.pth'):
     torch.save({
         'epoch': epochs,
         'model_state_dict': model.state_dict(),

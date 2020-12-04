@@ -9,5 +9,8 @@ my re-implementation of actor critic agents. Part of another "learning progress 
 ### Mujoco-py needs some env variable fixing
 On Ubuntu 18.04 (my machine) the following additional envirnoment variable have to be set.
 (in.bashrc or manually in terminal)
+
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/user/.mujoco/mujoco200/bin
+
+
 export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so.2.0
