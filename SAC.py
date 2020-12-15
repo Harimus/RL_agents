@@ -148,9 +148,9 @@ class SoftActorCritic(nn.Module):
         return self.actor(state, mean_action=mean_action)
 
 
-def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
-        actor_lr=1e-3, critic_lr=1e-3, alpha=0.2, buffer_size=100000,
-        off_policy_batch_size=128, reward_scale=1, initial_exploration=10000,
+def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
+        actor_lr=3e-4, critic_lr=3e-4, alpha=0.2, buffer_size=1000000,
+        off_policy_batch_size=1000, reward_scale=1, initial_exploration=10000,
         update_interval=1, test_interval=1000, load_agent=False):
 
     envname = 'Humanoid-v2'#'MountainCarContinuous-v0' #'Pendulum-v0
@@ -179,7 +179,7 @@ def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
 
             while not done:
                 action = actor(torch.as_tensor(state), mean_action=True)
-                env.render() if render is True else _
+                #env.render() if render is True else _
                 state, reward, done, _ = env.step(scale_action(action.numpy()))
                 total_reward += reward
             #env.close() #crashes mujoco_py
@@ -187,17 +187,21 @@ def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
             actor.train()
         return total_reward
 
-    agent = policy(observation_space, action_space, hidden_layer_size=(32, 32), activation_function=nn.ReLU,
+    agent = policy(observation_space, action_space, hidden_layer_size=(256, 256), activation_function=nn.ReLU,
                    action_scale=scaling_factor, action_loc=scaling_const)
     actor_optimizer = Adam(agent.actor.parameters(), lr=actor_lr)
     critic_q_optimizer = Adam(list(agent.critic_q1.parameters())+list(agent.critic_q2.parameters()), lr=critic_lr)
     critic_v_optimizer = Adam(agent.critic_v.parameters(), lr=critic_lr)
     replay_buffer = deque(maxlen=buffer_size)
+
+    # Loading parameters from previous run
+    prev_loss = 0
+    prev_epoch = 0
     if load_agent:
-        agent.actor, actor_optimizer, prev_loss, prev_epoch, replay_buffer = load_model_checkpoint(agent.actor, actor_optimizer, "./save_points/SAC_actor.pth")
-        agent.critic_v, critic_v_optimizer, _, _, _ = load_model_checkpoint(agent.actor, critic_v_optimizer, "./save_points/SAC_critic_v.pth")
-        agent.critic_q1, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.actor, critic_v_optimizer, "./save_points/SAC_critic_q1.pth")
-        agent.critic_q2, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.actor, critic_q_optimizer, "./save_points/SAC_critic_q2.pth")
+        agent.actor, actor_optimizer, prev_loss, prev_epoch, replay_buffer = load_model_checkpoint(agent.actor, actor_optimizer, "./save_points/SAC_actor.pth") #temporary workaround
+        agent.critic_v, critic_v_optimizer, _, _, _ = load_model_checkpoint(agent.critic_v, critic_v_optimizer, "./save_points/SAC_critic_v.pth")
+        agent.critic_q1, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.critic_q1, critic_q_optimizer, "./save_points/SAC_critic_q1.pth")
+        agent.critic_q2, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.critic_q2, critic_q_optimizer, "./save_points/SAC_critic_q2.pth")
         agent.copy_target_critic_v()  # make sure target_critic is also updated
 
     def update(episodes, update_target=False):
@@ -252,7 +256,7 @@ def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
 
     try:
         state, done = env.reset(), False
-        progress_bar = tqdm(range(1, epoch+1), unit_scale=1, smoothing=0)
+        progress_bar = tqdm(range(1+prev_epoch, epoch+1), unit_scale=1, smoothing=0)
         for i in progress_bar:
             with torch.no_grad():
                 if i < initial_exploration:
@@ -271,13 +275,12 @@ def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
                 update(batch, True)
 
             if i > initial_exploration and i % test_interval == 0:
-                total_reward = test(agent, render=True)# if i % (epoch/10) else False)
+                total_reward = test(agent, render=False)# if i % (epoch/10) else False)
                 plot(i, total_reward, "SoftActorCritic", epoch)
-                if i % (epoch / 100) == 0:
-                    progress_bar.set_description('Step: %i | Reward: %f' % (i, total_reward))
-        plt.show()
+                progress_bar.set_description('Step: %i | Reward: %f' % (i, total_reward))
         #Save all agents
-        save_model_checkpoint(agent.actor, actor_optimizer, i, total_reward, replay_buffer,  "./save_points/SAC_actor.pth",)
+        print("Saving trained network parameters to save_points....")
+        save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer,  filename="./save_points/SAC_actor.pth",)
         save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth",)
         save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth",)
         save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth",)
@@ -285,14 +288,13 @@ def sac(policy=SoftActorCritic, epoch=100000, gamma=0.99, polyak=0.995,
 
     except KeyboardInterrupt:
         #Actor saves all additional values, skip for critic
-        save_model_checkpoint(agent.actor, actor_optimizer, i, total_reward, replay_buffer,  "./save_points/SAC_actor.pth",)
+        print("Saving trained network parameters to save_points....")
+        save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer,  filename="./save_points/SAC_actor.pth",)
         save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth",)
         save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth",)
         save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth",)
+        print("Done.")
         sys.exit()
 
 if __name__ == '__main__':
-    #ag = sac(epoch=10000, reward_scale=1, alpha=0.4)
-    ag = sac(alpha=0.8, off_policy_batch_size=400)
-
-    #ag = sac(in_agent=ag)
+    ag = sac(load_agent=False)
