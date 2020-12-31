@@ -12,13 +12,13 @@ import matplotlib.pyplot as plt
 from util import plot_mountain_cart, save_model_checkpoint, load_model_checkpoint
 from tqdm import tqdm
 import sys
-steps, rewards = [], []
+import time
 fig, ax = plt.subplots()
 #  float32 have bug in rsample for TransformedDistribution
 torch.set_default_dtype(torch.float64)
 
 
-def plot(step, reward, title, epoch=1000000):
+def plot(step, reward, title, epoch=1000000, steps=[], rewards=[]):
     steps.append(step)
     rewards.append(reward)
     ax.plot(steps, rewards, 'b-')
@@ -151,7 +151,7 @@ class SoftActorCritic(nn.Module):
 def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
         actor_lr=3e-4, critic_lr=3e-4, alpha=0.2, buffer_size=1000000,
         off_policy_batch_size=1000, reward_scale=1, initial_exploration=10000,
-        update_interval=1, test_interval=1000, load_agent=False):
+        update_interval=1, test_interval=1000, load_agent=False, save_agent=False):
 
     envname = 'Humanoid-v2'#'MountainCarContinuous-v0' #'Pendulum-v0
     env = gym.make(envname)
@@ -197,11 +197,12 @@ def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
     # Loading parameters from previous run
     prev_loss = 0
     prev_epoch = 0
+    steps, rewards = [], []
     if load_agent:
-        agent.actor, actor_optimizer, prev_loss, prev_epoch, replay_buffer = load_model_checkpoint(agent.actor, actor_optimizer, "./save_points/SAC_actor.pth") #temporary workaround
-        agent.critic_v, critic_v_optimizer, _, _, _ = load_model_checkpoint(agent.critic_v, critic_v_optimizer, "./save_points/SAC_critic_v.pth")
-        agent.critic_q1, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.critic_q1, critic_q_optimizer, "./save_points/SAC_critic_q1.pth")
-        agent.critic_q2, critic_q_optimizer, _, _, _ = load_model_checkpoint(agent.critic_q2, critic_q_optimizer, "./save_points/SAC_critic_q2.pth")
+        agent.actor, actor_optimizer, prev_loss, prev_epoch, replay_buffer, steps, rewards = load_model_checkpoint(agent.actor, actor_optimizer, "./save_points/SAC_actor.pth") #temporary workaround
+        agent.critic_v, critic_v_optimizer, _, _, _, _, _ = load_model_checkpoint(agent.critic_v, critic_v_optimizer, "./save_points/SAC_critic_v.pth")
+        agent.critic_q1, critic_q_optimizer, _, _, _, _, _ = load_model_checkpoint(agent.critic_q1, critic_q_optimizer, "./save_points/SAC_critic_q1.pth")
+        agent.critic_q2, critic_q_optimizer, _, _, _, _, _ = load_model_checkpoint(agent.critic_q2, critic_q_optimizer, "./save_points/SAC_critic_q2.pth")
         agent.copy_target_critic_v()  # make sure target_critic is also updated
 
     def update(episodes, update_target=False):
@@ -210,7 +211,6 @@ def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
         rewards = torch.as_tensor([ep[2] for ep in episodes])
         next_states = torch.as_tensor([ep[3] for ep in episodes])
         is_done = torch.as_tensor([ep[-1] for ep in episodes])
-
         # Target for V
         pi = agent.actor(states)
         sample_actions = torch.clamp(pi.rsample(), min_action + clamping, max_action - clamping)
@@ -220,12 +220,10 @@ def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
         target_v = critic_q - entropy_component.detach()
 
         # Update V
-
         critic_v_loss = (agent.critic_v(states) - target_v).pow(2).mean()
         critic_v_optimizer.zero_grad()
         critic_v_loss.backward()
         critic_v_optimizer.step()
-
         # Target for Q
         target_q = rewards + gamma * ~is_done * agent.target_critic_v(next_states)
         # Update Q
@@ -273,28 +271,29 @@ def sac(policy=SoftActorCritic, epoch=1000000, gamma=0.99, polyak=0.995,
             if i > initial_exploration and i % update_interval == 0:
                 batch = random.sample(replay_buffer, off_policy_batch_size)
                 update(batch, True)
-
             if i > initial_exploration and i % test_interval == 0:
                 total_reward = test(agent, render=False)# if i % (epoch/10) else False)
-                plot(i, total_reward, "SoftActorCritic", epoch)
-                progress_bar.set_description('Step: %i | Reward: %f' % (i, total_reward))
+                plot(i, total_reward, "SoftActorCritic", epoch, steps=steps, rewards=rewards)
+            progress_bar.set_description('Step: %i | Reward: %f' % (i, total_reward))
         #Save all agents
         print("Saving trained network parameters to save_points....")
-        save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer,  filename="./save_points/SAC_actor.pth",)
-        save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth",)
-        save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth",)
-        save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth",)
+        if save_agent:
+            save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer, steps=steps, rewards=rewards, filename="./save_points/SAC_actor.pth")
+            save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth")
+            save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth")
+            save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth")
         return agent
 
     except KeyboardInterrupt:
         #Actor saves all additional values, skip for critic
-        print("Saving trained network parameters to save_points....")
-        save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer,  filename="./save_points/SAC_actor.pth",)
-        save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth",)
-        save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth",)
-        save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth",)
+        if save_agent:
+            print("Saving trained network parameters to save_points....")
+            save_model_checkpoint(agent.actor, actor_optimizer, criterion=total_reward, epochs=i, replay_buffer=replay_buffer, steps=steps, rewards=rewards, filename="./save_points/SAC_actor.pth")
+            save_model_checkpoint(agent.critic_v, critic_v_optimizer, filename="./save_points/SAC_critic_v.pth")
+            save_model_checkpoint(agent.critic_q1, critic_q_optimizer, filename="./save_points/SAC_critic_q1.pth")
+            save_model_checkpoint(agent.critic_q2, critic_q_optimizer, filename="./save_points/SAC_critic_q2.pth")
         print("Done.")
         sys.exit()
 
 if __name__ == '__main__':
-    ag = sac(load_agent=False)
+    ag = sac(load_agent=True, save_agent=True)
