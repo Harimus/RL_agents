@@ -8,6 +8,7 @@ from torch.distributions import Distribution, Independent, Normal
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+
 """Made for mountain Cart continuous"""
 def plot_Q_value(ax, agent_critic_Q, states, actions):
     X, Y, Z, Q = [], [], [], []
@@ -82,13 +83,15 @@ def plot_mountain_cart(agent):
     cbar_pi.ax.set_ylabel('std')
 
 
-def save_model_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion=0, epochs=0, replay_buffer=[], filename='./saved_model.pth'):
+def save_model_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion=0, epochs=0, replay_buffer=[], steps=[], rewards=[], filename='./saved_model.pth'):
     torch.save({
         'epoch': epochs,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': criterion,
-        'replay_buffer': replay_buffer
+        'replay_buffer': replay_buffer,
+        'steps': steps,
+        'rewards': rewards
                 },  filename)
 
 
@@ -96,7 +99,7 @@ def load_model_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimiz
     checkpoint = torch.load(filename)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    return model, optimizer, checkpoint['loss'], checkpoint['epoch'], checkpoint['replay_buffer']
+    return model, optimizer, checkpoint['loss'], checkpoint['epoch'], checkpoint['replay_buffer'], checkpoint['steps'], checkpoint['rewards']
 
 
 if __name__ == '__main__':
