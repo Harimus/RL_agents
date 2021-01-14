@@ -3,7 +3,7 @@ my re-implementation of actor critic agents. Part of another "learning progress 
 
 The generated results will be from the Google Colab (JupyterNotebook) version, since computational resources is limited at hand.
 
-With movement to Google Colab, we had to give up Mujoco as part of the environment (since one can't use Mujoco on Google Colab without tedious steps), and moved to (PyBullet)[https://pybullet.org/wordpress/] simulator, with openAI gym API support
+With movement to Google Colab, we had to give up Mujoco as part of the environment (since one can't use Mujoco on Google Colab without tedious steps), and moved to [PyBullet](https://pybullet.org/wordpress/) simulator, with openAI gym API support
 
 
 ##Requires 
