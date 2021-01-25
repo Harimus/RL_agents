@@ -9,7 +9,7 @@ The generated results will be from the Google Colab (JupyterNotebook) version, s
 
 Trying to reproduce the result of the paper on **PyBullet_Mujoco**, with original hyper parameters. 
 
-Preliminary Result:
+Preliminary Result(Running 1 Million iteration, 10% of the original paper):
 ![](./latest_run.gif)
 
 ##Requires 
