@@ -2,6 +2,15 @@
 my re-implementation of actor critic agents. Part of another "learning progress repo" I had but it started to become too messy... For now the focus is on Continuous action spaces, and actor_critic agents.
 
 
+## Soft-Actor-Critic
+
+### Preliminary result:
+
+Trying to reproduce the result of the paper on **PyBullet_Mujoco**, with original hyper parameters. 
+
+Preliminary Result:
+![](./latest_run.gif)
+
 ##Requires 
 * PyTorch (>1.7.0 for additional distributions)
 * openAI gym (including mujoco)
